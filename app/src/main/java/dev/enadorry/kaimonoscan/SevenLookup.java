@@ -17,13 +17,14 @@ final class SevenLookup {
     private static long lastRequest;
     static final class Product {
         String name, url, region, priceText;
+        String store="seven";
         long cents, checkedAt;
         JSONObject json() throws JSONException {
-            return new JSONObject().put("name",name).put("url",url).put("region",region)
+            return new JSONObject().put("store",store).put("name",name).put("url",url).put("region",region)
                 .put("priceText",priceText).put("cents",cents).put("checkedAt",checkedAt);
         }
         static Product read(JSONObject o) throws Exception {
-            Product p=new Product();p.name=o.getString("name");p.url=productUrl(o.getString("url"));
+            Product p=new Product();p.name=o.getString("name");p.store=o.optString("store","seven");p.url=StoreLookup.productUrl(p.store,o.getString("url"));
             p.region=o.optString("region","");p.priceText=o.optString("priceText","");
             p.cents=o.getLong("cents");p.checkedAt=o.getLong("checkedAt");
             if(p.name.isEmpty()||p.cents<=0||p.cents>110_000_000||p.checkedAt<=0)throw new IOException("保存データが不正です。");

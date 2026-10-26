@@ -44,7 +44,14 @@ public final class MainActivity extends AppCompatActivity {
     private android.content.SharedPreferences prefs;
     private LinearLayout root, rows;
     private TextView total, count, status, walletSummary, scanWallet, discountSummary;
-    private Button scanButton, codeButton;
+    private Button scanButton, codeButton, storeButton;
+    private StoreCatalog storeCatalog;
+    private String shop(){String s=prefs.getString("store","seven");return StoreLookup.validStore(s)?s:"seven";}
+    private String shopName(){return StoreLookup.name(shop());}
+    private String priceKey(String jan){return StoreLookup.key(shop(),jan);}
+    private void selectStore(String store){prefs.edit().putString("store",store).apply();if(storeButton!=null)storeButton.setText(shopName()+" ▾");lastScan="";}
+    private void chooseStore(){if(busy||scanning||labelInFlight)return;new ScanDialogBuilder(this).setTitle("お店").setSingleChoiceItems(new String[]{"セブン","ローソン","ファミマ"},shop().equals("seven")?0:shop().equals("lawson")?1:2,(d,w)->{selectStore(new String[]{"seven","lawson","family"}[w]);d.dismiss();}).setNegativeButton("戻る",null).show();}
+    private StoreCatalog catalog() throws Exception {if(storeCatalog==null)try(java.io.Reader r=new java.io.InputStreamReader(getAssets().open("store-products.json"),java.nio.charset.StandardCharsets.UTF_8)){storeCatalog=new StoreCatalog(r);}return storeCatalog;}
     private boolean busy=false;
     private long requestId=0;
     private final ExecutorService autoWorker=Executors.newSingleThreadExecutor();
@@ -52,16 +59,17 @@ public final class MainActivity extends AppCompatActivity {
     private long autoRetryAt;
     static final class Item {
         String jan, name, source; long price, cents; int qty;
-        String sourceUrl="", region="", discountType="none"; long checkedAt,discountValue; boolean labelPrice;
+        String sourceUrl="", region="", discountType="none",store=""; long checkedAt,discountValue; boolean labelPrice;
         Item(String j,String n,long p,int q,String s) { jan=j;name=n;price=p;cents=p*100;qty=q;source=s; }
         long netCents(){return Discount.unit(cents,discountType,discountValue);}
         boolean discounted(){return !discountType.equals("none");}
-        boolean samePrice(Item other){return cents==other.cents&&discountType.equals(other.discountType)&&discountValue==other.discountValue&&labelPrice==other.labelPrice;}
+        boolean samePrice(Item other){return store.equals(other.store)&&cents==other.cents&&discountType.equals(other.discountType)&&discountValue==other.discountValue&&labelPrice==other.labelPrice;}
         JSONObject json() throws JSONException {
-            return new JSONObject().put("jan",jan).put("name",name).put("price",price).put("qty",qty).put("source",source).put("cents",cents).put("sourceUrl",sourceUrl).put("region",region).put("checkedAt",checkedAt).put("discountType",discountType).put("discountValue",discountValue).put("labelPrice",labelPrice);
+            return new JSONObject().put("store",store.isEmpty()?"seven":store).put("jan",jan).put("name",name).put("price",price).put("qty",qty).put("source",source).put("cents",cents).put("sourceUrl",sourceUrl).put("region",region).put("checkedAt",checkedAt).put("discountType",discountType).put("discountValue",discountValue).put("labelPrice",labelPrice);
         }
         static Item read(JSONObject o) throws JSONException {
             Item i=new Item(o.getString("jan"),o.getString("name"),o.getLong("price"),o.getInt("qty"),o.optString("source","手入力"));
+            i.store=o.optString("store","seven");if(!StoreLookup.validStore(i.store))throw new JSONException("店舗が不正です");
             i.cents=o.optLong("cents",i.price*100);i.sourceUrl=o.optString("sourceUrl","");i.region=o.optString("region","");i.checkedAt=o.optLong("checkedAt",0);
             i.discountType=o.optString("discountType","none");i.discountValue=o.optLong("discountValue",0);i.labelPrice=o.optBoolean("labelPrice",false);
             Pricing.fractionalSubtotal(i.netCents(),i.qty); return i;
@@ -70,7 +78,7 @@ public final class MainActivity extends AppCompatActivity {
     private FrameLayout screen;
     private LinearLayout scanPanel;
     private DecoratedBarcodeView scanCamera;
-    private TextView scanTotal,scanCount,scanNotice;
+    private TextView scanTotal,scanCount,scanNotice,scanStore;
     private Button repeatButton,torchButton;
     private boolean scanning,activityResumed,scanProcessing,decoderRunning,torch;
     private int activeDialogs,quantityBefore;
@@ -199,7 +207,7 @@ public final class MainActivity extends AppCompatActivity {
         else if(label.equals("値札を読む"))b.setIconResource(R.drawable.ic_label_scan);
         else if(label.equals("JAN入力"))b.setIconResource(R.drawable.ic_keyboard);
         else if(label.equals("手入力"))b.setIconResource(R.drawable.ic_add);
-        else if(label.equals("セブンで探す"))b.setIconResource(R.drawable.ic_search);
+        else if(label.equals(shopName()+"で探す"))b.setIconResource(R.drawable.ic_search);
         else if(label.equals("PayPay残高"))b.setIconResource(R.drawable.ic_wallet);
         LinearLayout.LayoutParams spacing=new LinearLayout.LayoutParams(-1,-2);spacing.setMargins(0,dp(4),0,dp(4));b.setLayoutParams(spacing);
         b.setElevation(0);b.setStateListAnimator(null);b.setOnClickListener(v->action.run());return b;
@@ -226,7 +234,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout header=horizontal();
         LinearLayout brand=vertical();
         TextView title=text("かいもの",32,INK);title.setTypeface(displayFace());brand.addView(title);
-        header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));header.addView(iconButton(R.drawable.ic_settings,"設定",this::settings),new LinearLayout.LayoutParams(dp(48),dp(48)));root.addView(header);space(root,16);
+        header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));header.addView(iconButton(R.drawable.ic_settings,"設定",this::settings),new LinearLayout.LayoutParams(dp(48),dp(48)));root.addView(header);space(root,4);storeButton=button(shopName()+" ▾",false,this::chooseStore);root.addView(storeButton);space(root,12);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(false);scroll.setClipToPadding(false);
         LinearLayout content=vertical();content.setPadding(dp(4),dp(4),dp(4),dp(20));scroll.addView(content);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
@@ -241,13 +249,13 @@ public final class MainActivity extends AppCompatActivity {
         content.addView(summary);space(content,20);
         LinearLayout actions=horizontal();codeButton=button("JAN入力",false,this::codeInput);weighted(actions,codeButton);
         weighted(actions,button("手入力",false,()->edit("","",null,null,null)));content.addView(actions);space(content,8);
-        content.addView(button("セブンで探す",false,this::sevenEntry));content.addView(button("値札を読む",false,()->startLabelScan("",null)));space(content,12);
+        content.addView(button("会計用バーコード",true,this::checkoutBarcodes));content.addView(button("商品を探す",false,this::sevenEntry));content.addView(button("値札を読む",false,()->startLabelScan("",null)));space(content,12);
         status=paragraph("",MUTED);status.setVisibility(View.GONE);content.addView(status);space(content,16);
         content.addView(text("買い物リスト",20,INK));space(content,12);
         rows=vertical();content.addView(rows);space(content,16);
         content.addView(button("買い物をリセット",false,()->{
             if(cart.isEmpty())return;
-            new ScanDialogBuilder(this).setTitle("買い物をリセット？").setMessage("今回の一覧を消します。残高・保存した価格・セブンとのひも付けは残ります。")
+            new ScanDialogBuilder(this).setTitle("買い物をリセット？").setMessage("今回の一覧を消します。残高・保存した価格・店舗とのひも付けは残ります。")
                 .setNegativeButton("戻る",null).setPositiveButton("リセット",(d,w)->{cart.clear();save();refresh();}).show();
         }));space(content,16);
         TextView credit=text("Webサービス by Yahoo! JAPAN",16,MUTED);credit.setTextColor(LINK);credit.setGravity(Gravity.CENTER);credit.setOnClickListener(v->openUrl("https://developer.yahoo.co.jp/"));content.addView(credit);
@@ -305,7 +313,7 @@ public final class MainActivity extends AppCompatActivity {
         }));d.show();
     }
 
-    private int quantity(String jan){int result=0;for(Item i:cart)if(i.jan.equals(jan))result+=i.qty;return result;}
+    private int quantity(String jan){int result=0;for(Item i:cart)if(i.jan.equals(jan)&&i.store.equals(shop()))result+=i.qty;return result;}
     private void updateScanSummary(){
         if(scanTotal==null)return;
         long amount=0;int n=0;for(Item i:cart){amount+=Pricing.fractionalSubtotal(i.netCents(),i.qty);n+=i.qty;}
@@ -318,7 +326,7 @@ public final class MainActivity extends AppCompatActivity {
         if(ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED){cameraPermission.launch(Manifest.permission.CAMERA);return;}
         if(scanning)return;
         if(scanPanel==null)buildScanPanel();
-        scanGate=new ScanGate();scanProcessing=false;lastScan="";torch=false;
+        scanGate=new ScanGate();scanProcessing=false;lastScan="";torch=false;scanStore.setText(shopName()+" · 合計（税込）");
         scanCamera.setTorchOff();torchButton.setText("ライトON");
         scanning=true;scanBack.setEnabled(true);root.setVisibility(View.GONE);scanPanel.setVisibility(View.VISIBLE);
         scanNotice.setText("バーコードを枠に合わせる");
@@ -337,7 +345,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout summary=vertical();summary.setPadding(dp(20),dp(16),dp(20),dp(16));
         summary.setBackground(shape(CONTAINER,28));
         LinearLayout heading=horizontal();heading.setGravity(Gravity.CENTER_VERTICAL);
-        heading.addView(text("合計（税込）",14,ON_CONTAINER),new LinearLayout.LayoutParams(0,-2,1));
+        scanStore=text(shopName()+" · 合計（税込）",14,ON_CONTAINER);heading.addView(scanStore,new LinearLayout.LayoutParams(0,-2,1));
         scanCount=text("",14,ON_CONTAINER);heading.addView(scanCount);summary.addView(heading);
         scanTotal=text("",52,ON_CONTAINER);scanTotal.setTypeface(displayFace());
         scanTotal.setSingleLine(true);scanTotal.setIncludeFontPadding(false);
@@ -445,9 +453,9 @@ public final class MainActivity extends AppCompatActivity {
             productHeader.addView(name,new LinearLayout.LayoutParams(0,-2,1));
             View more=iconButton(R.drawable.ic_more,i.name+"の操作",()->itemActions(i));
             productHeader.addView(more,new LinearLayout.LayoutParams(dp(48),dp(48)));card.addView(productHeader);
-            String origin=!i.sourceUrl.isEmpty()?"セブン掲載":i.source.contains("共有")?"共有価格":"手入力";
+            String origin=!i.sourceUrl.isEmpty()?StoreLookup.name(i.store)+"掲載":i.source.contains("共有")?"共有価格":"手入力";
             LinearLayout priceRow=horizontal();
-            TextView unit=text(yenUnit(i.netCents())+" / 個"+(i.discounted()?"  元 "+yenUnit(i.cents):""),14,MUTED);priceRow.addView(unit,new LinearLayout.LayoutParams(0,-2,1));
+            TextView unit=text(yenUnit(i.netCents())+" / 個 · "+StoreLookup.name(i.store)+(i.discounted()?"  元 "+yenUnit(i.cents):""),14,MUTED);priceRow.addView(unit,new LinearLayout.LayoutParams(0,-2,1));
             Button sale=button(Discount.label(i.discountType,i.discountValue),false,()->discountDialog(i));sale.setMinHeight(dp(48));sale.setPadding(dp(16),dp(8),dp(16),dp(8));priceRow.addView(sale,new LinearLayout.LayoutParams(-2,dp(48)));card.addView(priceRow);space(card,8);
             LinearLayout controls=horizontal();
             controls.addView(button("−",false,()->{if(i.qty>1)i.qty--;else cart.remove(i);save();refresh();}),new LinearLayout.LayoutParams(dp(48),dp(48)));
@@ -457,8 +465,38 @@ public final class MainActivity extends AppCompatActivity {
             rows.addView(card);space(rows,8);
         }
     }
+    private void checkoutBarcodes(){
+        if(busy||scanning||labelInFlight)return;
+        java.util.LinkedHashMap<String,Item> grouped=new java.util.LinkedHashMap<>();
+        int missing=0;
+        for(Item item:cart){
+            if(!Pricing.validJan(item.jan)){missing+=item.qty;continue;}
+            Item row=grouped.get(item.jan);
+            if(row==null){row=new Item(item.jan,item.name,item.price,item.qty,item.source);grouped.put(item.jan,row);}else row.qty+=item.qty;
+        }
+        if(grouped.isEmpty()){message("表示できるバーコードがありません。");return;}
+        java.util.ArrayList<Item> items=new java.util.ArrayList<>(grouped.values());
+        LinearLayout body=vertical();body.setPadding(dp(16),dp(8),dp(16),dp(8));
+        TextView position=text("",14,MUTED),name=text("",22,INK),quantity=text("",24,INK),digits=text("",20,0xFF000000);
+        body.addView(position);body.addView(name);body.addView(quantity);
+        android.widget.ImageView image=new android.widget.ImageView(this);image.setBackgroundColor(0xFFFFFFFF);image.setAdjustViewBounds(true);image.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);image.setContentDescription("商品のJANバーコード");
+        LinearLayout white=vertical();white.setPadding(dp(12),dp(16),dp(12),dp(12));white.setBackgroundColor(0xFFFFFFFF);white.addView(image,new LinearLayout.LayoutParams(-1,dp(150)));digits.setGravity(Gravity.CENTER);white.addView(digits);body.addView(white);
+        if(missing>0)body.addView(text("バーコードなし："+missing+"点",14,MUTED));
+        LinearLayout nav=horizontal();Button previous=button("前へ",false,()->{}),next=button("次へ",true,()->{});weighted(nav,previous);weighted(nav,next);body.addView(nav);
+        final int[] at={0};
+        Runnable render=()->{
+            Item item=items.get(at[0]);position.setText((at[0]+1)+" / "+items.size());name.setText(item.name);quantity.setText(item.qty+"個");digits.setText(item.jan);
+            image.setImageBitmap(CheckoutBarcode.bitmap(item.jan));previous.setEnabled(at[0]>0);next.setEnabled(at[0]<items.size()-1);
+        };
+        previous.setOnClickListener(v->{if(at[0]>0){at[0]--;render.run();}});next.setOnClickListener(v->{if(at[0]<items.size()-1){at[0]++;render.run();}});render.run();
+        ScrollView scroll=new ScrollView(this);scroll.addView(body);
+        AlertDialog dialog=new ScanDialogBuilder(this).setTitle("会計用バーコード").setView(scroll).setPositiveButton("閉じる",null).create();
+        dialog.show();if(dialog.getWindow()!=null){android.view.WindowManager.LayoutParams params=dialog.getWindow().getAttributes();params.screenBrightness=1f;dialog.getWindow().setAttributes(params);dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}
+    }
     private void itemActions(Item item){
-        String[] actions=item.jan.isEmpty()?new String[]{"編集","詳細"}:new String[]{"編集","セブン価格","店頭価格を共有","詳細"};
+        if(busy||labelInFlight)return;
+        selectStore(item.store);
+        String[] actions=item.jan.isEmpty()?new String[]{"編集","詳細"}:new String[]{"編集",shopName()+"価格","店頭価格を共有","詳細"};
         new ScanDialogBuilder(this).setTitle(item.name).setItems(actions,(d,w)->{
             if(w==0){edit(item.jan,item.name,item.price,true,item);return;}
             if(!item.jan.isEmpty()&&w==1){
@@ -505,11 +543,11 @@ public final class MainActivity extends AppCompatActivity {
     private void lookup(String jan) {
         if(busy)return;
         if(!Pricing.validJan(jan)){message("このコードは対応するJANコードではありません。手入力で追加できます。");return;}
-        for(Item i:cart) if(i.jan.equals(jan)&&!i.discounted()&&!i.labelPrice) {if(i.qty<999){i.qty++;save();refresh();}else message("数量は999個までです。");return;}
+        for(Item i:cart) if(i.jan.equals(jan)&&i.store.equals(shop())&&!i.discounted()&&!i.labelPrice) {if(i.qty<999){i.qty++;save();refresh();}else message("数量は999個までです。");return;}
         try {
             JSONObject catalog=new JSONObject(prefs.getString("manual","{}"));
-            if(catalog.has(jan)) {
-                Item saved=Item.read(catalog.getJSONObject(jan));
+            if(catalog.has(priceKey(jan))) {
+                Item saved=Item.read(catalog.getJSONObject(priceKey(jan)));if(!saved.store.equals(shop()))throw new JSONException("店舗が異なります");
                 if(scanning){saved.qty=1;saved.source="保存した手入力価格";add(saved);return;}
                 new ScanDialogBuilder(this).setTitle("保存済みの手入力商品").setMessage(saved.name+"\n"+yenUnit(saved.cents)+" / 個（税込）\n保存時から価格が変わっていないか確認してください。")
                     .setPositiveButton("追加",(d,w)->{saved.qty=1;saved.source="保存した手入力価格";add(saved);})
@@ -525,6 +563,7 @@ public final class MainActivity extends AppCompatActivity {
         remote(jan);
     }
     private void lookupPB(String jan) {
+        if(!shop().equals("seven")){lookupRegular(jan);return;}
         sevenTask(()->{
             if(pbIndex==null)try(java.io.Reader reader=new java.io.InputStreamReader(getAssets().open("pb-names.json"),java.nio.charset.StandardCharsets.UTF_8)){pbIndex=new PBLookup(reader);}
             return pbIndex.find(jan);
@@ -547,13 +586,14 @@ public final class MainActivity extends AppCompatActivity {
             } catch(Exception e) {
                 String msg=YahooLookup.userMessage(e);
                 runOnUiThread(()->{if(isFinishing()||isDestroyed()||token!=requestId)return;loading(false);
-                    new ScanDialogBuilder(this).setTitle("Yahoo!で検索できませんでした").setMessage(msg).setPositiveButton("セブンで検索",(d,w)->promptSeven(jan,"",null)).setNeutralButton("値札を読む",(d,w)->startLabelScan(jan,null)).setNegativeButton("戻る",null).show();});
+                    new ScanDialogBuilder(this).setTitle("Yahoo!で検索できませんでした").setMessage(msg).setPositiveButton(shopName()+"で検索",(d,w)->promptSeven(jan,"",null)).setNeutralButton("値札を読む",(d,w)->startLabelScan(jan,null)).setNegativeButton("戻る",null).show();});
             }
         });
     }
     private void choose(String jan,YahooLookup.SearchResult result) {
         List<YahooLookup.Candidate> found=result.prices;
         String keyword=SearchTerms.bestSeed(result.names);
+        if(!shop().equals("seven")){if(!keyword.isEmpty()){searchSeven(jan,keyword,null);return;}if(!found.isEmpty()){String[] names=new String[found.size()];for(int n=0;n<names.length;n++)names[n]=found.get(n).name;new ScanDialogBuilder(this).setTitle("商品名を選択").setItems(names,(d,w)->searchSeven(jan,names[w],null)).setNegativeButton("戻る",null).show();return;}}
         if(found.isEmpty()&&keyword.isEmpty()){
             if(!result.hints.isEmpty()){
                 String[] labels=new String[result.hints.size()];for(int i=0;i<labels.length;i++)labels[i]=SearchTerms.clean(result.hints.get(i))+"\nJAN未確認：商品名の検索候補のみ";
@@ -564,14 +604,14 @@ public final class MainActivity extends AppCompatActivity {
         }
         if(found.isEmpty()) {
             new ScanDialogBuilder(this).setTitle("希望小売価格が見つかりません")
-                .setMessage(keyword.isEmpty()?"JANが一致する商品情報がありません。商品名でセブンを検索するか、公式商品URLを登録できます。":"商品名は取得できましたが、希望小売価格がありません。\n\n"+keyword+"\n\nセブンの掲載価格を取得できます。")
-                .setPositiveButton("セブンで検索",(d,w)->promptSeven(jan,keyword,null)).setNeutralButton("値札を読む",(d,w)->startLabelScan(jan,null)).setNegativeButton("戻る",null).show();return;
+                .setMessage(keyword.isEmpty()?"JANが一致する商品情報がありません。商品名で"+shopName()+"を検索するか、公式商品URLを登録できます。":"商品名は取得できましたが、希望小売価格がありません。\n\n"+keyword+"\n\n"+shopName()+"の掲載価格を取得できます。")
+                .setPositiveButton(shopName()+"で検索",(d,w)->promptSeven(jan,keyword,null)).setNeutralButton("値札を読む",(d,w)->startLabelScan(jan,null)).setNegativeButton("戻る",null).show();return;
         }
         String[] labels=new String[found.size()];
         for(int n=0;n<found.size();n++){YahooLookup.Candidate c=found.get(n);labels[n]=c.name+"\n希望小売価格 "+yen(c.price)+" / "+(c.taxIncluded==null?"税区分不明":c.taxIncluded?"税込表示":"税抜表示");}
         new ScanDialogBuilder(this).setTitle("容量・入数が同じ商品を選択")
             .setItems(labels,(d,w)->{YahooLookup.Candidate c=found.get(w);confirmCandidate(jan,c);})
-            .setNegativeButton("戻る",null).setNeutralButton("セブンで検索",(d,w)->promptSeven(jan,keyword,null)).show();
+            .setNegativeButton("戻る",null).setNeutralButton(shopName()+"で検索",(d,w)->promptSeven(jan,keyword,null)).show();
     }
     private void confirmCandidate(String jan,YahooLookup.Candidate c) {
         new ScanDialogBuilder(this).setTitle("1個分の価格を確認")
@@ -601,9 +641,9 @@ public final class MainActivity extends AppCompatActivity {
             catch(NumberFormatException e){priceInput.setError("0〜1,000,000円を入力してください");return;}
             int selected=tax.getSelectedItemPosition();if(selected==0){message("税区分を選択してください。");return;}
             long included=Pricing.inclusive(enteredPrice,selected==2?8:selected==3?10:0);
-            Item result=new Item(jan,enteredName,included,1,"確認済みの概算価格");
+            Item result=new Item(jan,enteredName,included,1,"確認済みの概算価格");result.store=shop();
             if(remember.isChecked()) {
-                try {JSONObject db=new JSONObject(prefs.getString("manual","{}"));db.put(jan,result.json());prefs.edit().putString("manual",db.toString()).apply();}
+                try {JSONObject db=new JSONObject(prefs.getString("manual","{}"));db.put(priceKey(jan),result.json());prefs.edit().putString("manual",db.toString()).apply();}
                 catch(JSONException e){message("商品の保存に失敗しました。");return;}
             }
             if(existing!=null){existing.name=enteredName;existing.price=included;existing.cents=included*100;existing.source="手動修正";existing.sourceUrl="";existing.region="";existing.checkedAt=0;existing.discountType="none";existing.discountValue=0;existing.labelPrice=false;save();refresh();}
@@ -613,6 +653,7 @@ public final class MainActivity extends AppCompatActivity {
         }));dialog.show();
     }
     private void add(Item i) {
+        if(i.store.isEmpty())i.store=shop();
         for(Item old:cart) if(!i.jan.isEmpty()&&old.jan.equals(i.jan)&&old.samePrice(i)) {
             if(old.qty>=999){message("数量は999個までです。");return;}
             old.qty++;if(!i.sourceUrl.isEmpty()){old.source=i.source;old.sourceUrl=i.sourceUrl;old.region=i.region;old.checkedAt=i.checkedAt;}save();refresh();return;
@@ -660,15 +701,17 @@ public final class MainActivity extends AppCompatActivity {
                 else price.setText(LabelText.decimal(choice.cents));
             }).setNegativeButton("戻る",null).show();
         }));
+        Button searchName=button(shopName()+"で商品名を検索",false,()->{});if(!jan.isEmpty())body.addView(searchName);
         CheckBox confirmed=new MaterialCheckBox(this);confirmed.setText("商品名・1個の税込価格を確認した");confirmed.setTextColor(INK);body.addView(confirmed);
         CheckBox remember=new MaterialCheckBox(this);remember.setText("通常価格として保存・共有");remember.setTextColor(INK);remember.setEnabled(!jan.isEmpty());body.addView(remember);
         body.addView(button("読み取った文字",false,()->new ScanDialogBuilder(this).setTitle("読み取り結果").setMessage(raw==null?"":raw).setPositiveButton("閉じる",null).show()));
         AlertDialog dialog=new ScanDialogBuilder(this).setTitle("値札を確認").setView(body).setPositiveButton(existing==null?"追加":"更新",null).setNeutralButton("撮り直す",(d,w)->startLabelScan(jan,existing)).setNegativeButton("戻る",null).create();
+        searchName.setOnClickListener(v->{String q=name.getText().toString().trim();if(q.isEmpty()){name.setError("商品名を入力してください");return;}dialog.dismiss();searchSeven(jan,q,existing);});
         dialog.setOnShowListener(d->{dialog.getButton(-1).setEnabled(false);confirmed.setOnCheckedChangeListener((v,on)->dialog.getButton(-1).setEnabled(on));dialog.getButton(-1).setOnClickListener(v->{
             String productName=name.getText().toString().trim();if(productName.isEmpty()){name.setError("商品名を入力してください");return;}
             try{
-                long cents=LabelText.parsePrice(price.getText().toString());Item item=new Item(jan,productName,cents/100,1,"値札読取（確認済み）");item.cents=cents;item.labelPrice=!remember.isChecked();
-                if(remember.isChecked()&&!jan.isEmpty()){JSONObject db=new JSONObject(prefs.getString("manual","{}"));db.put(jan,item.json());if(!prefs.edit().putString("manual",db.toString()).commit()){message("通常価格を保存できませんでした。");return;}}
+                long cents=LabelText.parsePrice(price.getText().toString());Item item=new Item(jan,productName,cents/100,1,"値札読取（確認済み）");item.store=shop();item.cents=cents;item.labelPrice=!remember.isChecked();
+                if(remember.isChecked()&&!jan.isEmpty()){JSONObject db=new JSONObject(prefs.getString("manual","{}"));db.put(priceKey(jan),item.json());if(!prefs.edit().putString("manual",db.toString()).commit()){message("通常価格を保存できませんでした。");return;}}
                 if(existing!=null&&cart.contains(existing)){existing.name=item.name;existing.price=item.price;existing.cents=cents;existing.source=item.source;existing.sourceUrl="";existing.region="";existing.checkedAt=0;existing.discountType="none";existing.discountValue=0;existing.labelPrice=item.labelPrice;save();refresh();}else add(item);
                 if(remember.isChecked())enqueueAutoShare(item,"manual");dialog.dismiss();
             }catch(Exception e){price.setError("0〜1,100,000円の税込価格を確認してください");}
@@ -679,7 +722,7 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout body=vertical();body.setPadding(dp(20),dp(8),dp(20),dp(8));
         body.addView(button("保存した手入力商品を削除",false,()->new ScanDialogBuilder(this).setTitle("保存済み商品を削除？").setMessage("買い物中の一覧は残ります。")
             .setNegativeButton("戻る",null).setPositiveButton("削除",(d,w)->{prefs.edit().remove("manual").apply();message("保存済み商品を削除しました。");}).show()));
-        body.addView(button("セブンの登録商品を管理",false,this::sevenLibrary));
+        body.addView(button(shopName()+"の登録商品を管理",false,this::sevenLibrary));
         body.addView(button("みんなの価格データベース",false,this::communitySettings));
         MaterialSwitch autoShare=new MaterialSwitch(this);autoShare.setText("価格データを自動送信");autoShare.setMinHeight(dp(64));autoShare.setPadding(dp(16),dp(8),dp(16),dp(8));autoShare.setTextColor(INK);autoShare.setChecked(prefs.getBoolean("autoShare",true));
         autoShare.setOnCheckedChangeListener((v,on)->{prefs.edit().putBoolean("autoShare",on).apply();if(on)sendNextAuto();});body.addView(autoShare);
@@ -695,7 +738,7 @@ public final class MainActivity extends AppCompatActivity {
     private void yahooSettings(){
         LinearLayout body=vertical();body.setPadding(dp(20),dp(8),dp(20),dp(8));
         body.addView(text("Yahoo!連携（任意）",15,INK));EditText id=field("Client ID",prefs.getString("clientId",""),false);id.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);body.addView(id);
-        body.addView(paragraph("共有データ・セブン検索はIDなしで使えます。Yahoo!を使う場合だけClient IDを入力してください。Client Secretは不要です。",MUTED));
+        body.addView(paragraph("共有データ・"+shopName()+"検索はIDなしで使えます。Yahoo!を使う場合だけClient IDを入力してください。Client Secretは不要です。",MUTED));
         body.addView(button("入力中のIDを保存して接続テスト",false,()->connectionTest(id.getText().toString().trim())));space(body,8);
         body.addView(button("Client IDの取得ページ",false,()->openUrl("https://developer.yahoo.co.jp/start/")));space(body,8);
         new ScanDialogBuilder(this).setTitle("Yahoo!連携（任意）").setView(body).setNegativeButton("戻る",null)
@@ -755,7 +798,7 @@ public final class MainActivity extends AppCompatActivity {
     private String communityEndpoint(){
         return CommunityConfig.endpoint(prefs.getString("communityUrl",null),prefs.getBoolean("communityConfigured",false));
     }
-    private String alternateLookupLabel(){return CommunityConfig.yahooEnabled(prefs.getString("clientId",""))?"別の価格を探す":"セブンで探す";}
+    private String alternateLookupLabel(){return CommunityConfig.yahooEnabled(prefs.getString("clientId",""))?"別の価格を探す":shopName()+"で探す";}
     private void communitySettings(){
         LinearLayout body=vertical();body.setPadding(dp(16),dp(8),dp(16),dp(8));
         body.addView(paragraph("同じ共有APIのURLを設定した人同士で商品・価格を集めます。標準のCloudflareは設定なしで検索できます。投稿には管理者が発行する投稿用キーが必要です。投稿は承認後に公開されます。",MUTED));
@@ -776,6 +819,7 @@ public final class MainActivity extends AppCompatActivity {
         String endpoint=communityEndpoint();
         sevenTask(()->CommunityApi.lookup(endpoint,jan),prices->{
             if(prices.isEmpty()){remote(jan);return;}
+            if(!shop().equals("seven")){java.util.LinkedHashSet<String> names=new java.util.LinkedHashSet<>();for(CommunityApi.Price p:prices)names.add(p.name);String[] foundNames=names.toArray(new String[0]);if(foundNames.length==1)searchSeven(jan,foundNames[0],null);else new ScanDialogBuilder(this).setTitle("商品名を選択").setItems(foundNames,(d,w)->searchSeven(jan,foundNames[w],null)).setNeutralButton("自分で検索",(d,w)->promptSeven(jan,"",null)).setNegativeButton("戻る",null).show();return;}
             String[] labels=new String[prices.size()];for(int n=0;n<labels.length;n++){CommunityApi.Price p=prices.get(n);labels[n]=p.name+"\n"+yenUnit(p.cents)+" / 個（税込）\n"+p.context();}
             new ScanDialogBuilder(this).setTitle("共有価格を選択（店舗・容量を確認）").setItems(labels,(d,w)->{
                 CommunityApi.Price p=prices.get(w);
@@ -829,16 +873,16 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private SevenLookup.Product readSeven(String jan) {
-        try {JSONObject all=new JSONObject(prefs.getString("sevenLinks","{}"));return all.has(jan)?SevenLookup.Product.read(all.getJSONObject(jan)):null;}
+        try {JSONObject all=new JSONObject(prefs.getString("sevenLinks","{}"));SevenLookup.Product p=all.has(priceKey(jan))?SevenLookup.Product.read(all.getJSONObject(priceKey(jan))):null;return p!=null&&p.store.equals(shop())?p:null;}
         catch(Exception e){return null;}
     }
     private void storeSeven(String jan,SevenLookup.Product p) throws JSONException {
-        JSONObject all=new JSONObject(prefs.getString("sevenLinks","{}"));all.put(jan,p.json());
-        JSONObject manual=new JSONObject(prefs.getString("manual","{}"));manual.remove(jan);
+        JSONObject all=new JSONObject(prefs.getString("sevenLinks","{}"));if(!p.store.equals(shop()))throw new JSONException("店舗が異なります");all.put(priceKey(jan),p.json());
+        JSONObject manual=new JSONObject(prefs.getString("manual","{}"));manual.remove(priceKey(jan));
         prefs.edit().putString("sevenLinks",all.toString()).putString("manual",manual.toString()).apply();
     }
     private void removeSeven(String jan) {
-        try {JSONObject all=new JSONObject(prefs.getString("sevenLinks","{}"));all.remove(jan);prefs.edit().putString("sevenLinks",all.toString()).apply();}
+        try {JSONObject all=new JSONObject(prefs.getString("sevenLinks","{}"));all.remove(priceKey(jan));prefs.edit().putString("sevenLinks",all.toString()).apply();}
         catch(JSONException e){message("保存データを変更できませんでした。");}
     }
     private <T> void sevenTask(Callable<T> task,java.util.function.Consumer<T> success,java.util.function.Consumer<Exception> failure) {
@@ -850,17 +894,17 @@ public final class MainActivity extends AppCompatActivity {
         });
     }
     private String sevenError(Exception e) {
-        return e instanceof java.io.IOException&&e.getMessage()!=null?e.getMessage():"セブンの商品情報を読み取れませんでした。時間を置いて再試行してください。";
+        return e instanceof java.io.IOException&&e.getMessage()!=null?e.getMessage():shopName()+"の商品情報を読み取れませんでした。時間を置いて再試行してください。";
     }
     private void sevenEntry() {
         EditText code=field("8桁・13桁のJAN番号","",true);
-        AlertDialog d=new ScanDialogBuilder(this).setTitle("セブンの商品を登録").setView(wrap(code)).setPositiveButton("次へ",null).setNegativeButton("戻る",null).create();
+        AlertDialog d=new ScanDialogBuilder(this).setTitle(shopName()+"の商品を登録").setView(wrap(code)).setPositiveButton("次へ",null).setNegativeButton("戻る",null).create();
         d.setOnShowListener(x->d.getButton(-1).setOnClickListener(v->{String j=code.getText().toString().trim();
             if(!Pricing.validJan(j)){code.setError("正しいJAN番号を入力してください");return;}
             d.dismiss();promptSeven(j,"",cartItem(j));
         }));d.show();
     }
-    private Item cartItem(String jan){for(Item i:cart)if(i.jan.equals(jan))return i;return null;}
+    private Item cartItem(String jan){for(Item i:cart)if(i.jan.equals(jan)&&i.store.equals(shop()))return i;return null;}
     private void promptSeven(String jan,String seed,Item existing) {
         if(busy){message("通信中です。");return;}
         LinearLayout body=vertical();body.setPadding(dp(20),dp(8),dp(20),dp(8));
@@ -868,38 +912,44 @@ public final class MainActivity extends AppCompatActivity {
         EditText query=field("商品名（例：じゃがりこ）",cleaned,false);body.addView(query);
         String shorter=SearchTerms.shorter(cleaned);
         if(!shorter.isEmpty()&&!shorter.equals(cleaned))body.addView(button("短い名前で検索："+shorter,false,()->query.setText(shorter)));
-        EditText url=field("またはセブン公式の商品詳細URL","",false);url.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);body.addView(url);
+        EditText url=field("または"+shopName()+"公式の商品詳細URL","",false);url.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);body.addView(url);
         Button manualButton=button("価格を手入力",false,()->{});body.addView(manualButton);
         Button labelButton=button("値札を読む",false,()->{});body.addView(labelButton);
+        Button categoryButton=button("カテゴリから探す",false,()->{});if(!shop().equals("seven"))body.addView(categoryButton);
         ScrollView scroll=new ScrollView(this);scroll.addView(body);
-        AlertDialog d=new ScanDialogBuilder(this).setTitle("セブンで探す").setView(scroll).setPositiveButton("商品名で検索",null).setNeutralButton("URLから取得",null).setNegativeButton("戻る",null).create();
+        AlertDialog d=new ScanDialogBuilder(this).setTitle(shopName()+"で探す").setView(scroll).setPositiveButton("商品名で検索",null).setNeutralButton("URLから取得",null).setNegativeButton("戻る",null).create();
+        categoryButton.setOnClickListener(v->{d.dismiss();browseCategories(jan,existing);});
         manualButton.setOnClickListener(v->{d.dismiss();edit(jan,query.getText().toString().trim(),null,null,existing);});
         labelButton.setOnClickListener(v->{d.dismiss();startLabelScan(jan,existing);});
         d.setOnShowListener(x->{d.getButton(-1).setOnClickListener(v->{
             String q=query.getText().toString().trim();if(q.isEmpty()||q.length()>150){query.setError("1〜150文字の検索語を入力してください");return;}
             d.dismiss();searchSeven(jan,q,existing);
         });d.getButton(-3).setOnClickListener(v->{
-            String value;try{value=SevenLookup.productUrl(url.getText().toString());}catch(Exception e){url.setError(e.getMessage());return;}
+            String value;try{value=StoreLookup.productUrl(shop(),url.getText().toString());}catch(Exception e){url.setError(e.getMessage());return;}
             d.dismiss();fetchSevenForLink(jan,value,existing);
         });});d.show();
     }
     private void searchSeven(String jan,String query,Item existing) {
-        sevenTask(()->SevenLookup.search(query),result->{
+        sevenTask(()->shop().equals("seven")?SevenLookup.search(query):catalog().search(shop(),query,""),result->showStoreResults(jan,query,existing,result),e->new ScanDialogBuilder(this).setTitle(shopName()+"を検索できませんでした").setMessage(sevenError(e)).setPositiveButton("検索語・URLを変更",(d,w)->promptSeven(jan,query,existing)).setNeutralButton("値札を読む",(d,w)->startLabelScan(jan,existing)).setNegativeButton("閉じる",null).show());
+    }
+    private void browseCategories(String jan,Item existing){
+        sevenTask(()->catalog().categories(shop()),categories->new ScanDialogBuilder(this).setTitle("カテゴリ").setItems(categories.toArray(new String[0]),(d,w)->{String category=categories.get(w);sevenTask(()->catalog().search(shop(),"",category),r->showStoreResults(jan,category,existing,r),e->message(sevenError(e)));}).setNegativeButton("戻る",null).show(),e->message(sevenError(e)));
+    }
+    private void showStoreResults(String jan,String query,Item existing,SevenLookup.SearchResult result){
             if(result.links.isEmpty()) {
-                new ScanDialogBuilder(this).setTitle("セブンに候補がありません")
+                new ScanDialogBuilder(this).setTitle(shopName()+"に候補がありません")
                     .setMessage("検索語："+result.query+"\n短い商品名で再検索するか、公式商品ページのURLを登録してください。")
                     .setPositiveButton("検索語・URLを変更",(d,w)->promptSeven(jan,query,existing)).setNeutralButton("値札を読む",(d,w)->startLabelScan(jan,existing)).setNegativeButton("閉じる",null).show();return;
             }
             String[] labels=new String[result.links.size()];
-            for(int n=0;n<labels.length;n++){SevenLookup.Link l=result.links.get(n);labels[n]=l.name+"\n"+l.priceText+"\n"+l.region;}
+            for(int n=0;n<labels.length;n++){SevenLookup.Link l=result.links.get(n);labels[n]=l.name+(l.priceText.isEmpty()?"":"\n"+l.priceText)+(l.region.isEmpty()?"":"\n"+l.region);}
             new ScanDialogBuilder(this).setTitle("商品を選択")
                 .setItems(labels,(d,w)->fetchSevenForLink(jan,result.links.get(w).url,existing))
                 .setNeutralButton("検索語・URLを変更",(d,w)->promptSeven(jan,query,existing)).setNegativeButton("閉じる",null).show();
-        },e->new ScanDialogBuilder(this).setTitle("セブンを検索できませんでした").setMessage(sevenError(e))
-            .setPositiveButton("検索語・URLを変更",(d,w)->promptSeven(jan,query,existing)).setNeutralButton("値札を読む",(d,w)->startLabelScan(jan,existing)).setNegativeButton("閉じる",null).show());
+
     }
     private void fetchSevenForLink(String jan,String url,Item existing) {
-        sevenTask(()->SevenLookup.load(url),p->confirmSeven(jan,p,existing),e->new ScanDialogBuilder(this).setTitle("価格を取得できませんでした").setMessage(sevenError(e))
+        sevenTask(()->StoreLookup.load(shop(),url),p->confirmSeven(jan,p,existing),e->new ScanDialogBuilder(this).setTitle("価格を取得できませんでした").setMessage(sevenError(e))
             .setPositiveButton("別の商品・URL",(d,w)->promptSeven(jan,"",existing)).setNeutralButton("値札を読む",(d,w)->startLabelScan(jan,existing)).setNegativeButton("閉じる",null).show());
     }
     private void confirmSeven(String jan,SevenLookup.Product p,Item existing) {
@@ -913,28 +963,28 @@ public final class MainActivity extends AppCompatActivity {
         AlertDialog d=new ScanDialogBuilder(this).setTitle("JANと公式商品をひも付け").setView(scroll).setPositiveButton(existing==null?"登録して追加":"登録して更新",null)
             .setNeutralButton("別の商品を選ぶ",(x,w)->promptSeven(jan,p.name,existing)).setNegativeButton("戻る",null).create();
         d.setOnShowListener(x->{d.getButton(-1).setEnabled(false);check.setOnCheckedChangeListener((v,on)->d.getButton(-1).setEnabled(on));
-            d.getButton(-1).setOnClickListener(v->{try{storeSeven(jan,p);useSeven(jan,p,existing,"セブン公式掲載価格");d.dismiss();}catch(Exception e){message("登録を保存できませんでした。");}});
+            d.getButton(-1).setOnClickListener(v->{try{storeSeven(jan,p);useSeven(jan,p,existing,shopName()+"公式掲載価格");d.dismiss();}catch(Exception e){message("登録を保存できませんでした。");}});
         });d.show();
     }
     private void useSeven(String jan,SevenLookup.Product p,Item existing,String source) {
-        Item i=new Item(jan,p.name,p.cents/100,1,source);i.cents=p.cents;i.sourceUrl=p.url;i.checkedAt=p.checkedAt;i.region=p.region;
+        Item i=new Item(jan,p.name,p.cents/100,1,source);i.store=p.store;i.cents=p.cents;i.sourceUrl=p.url;i.checkedAt=p.checkedAt;i.region=p.region;
         if(existing!=null&&cart.contains(existing)) {
             existing.name=i.name;existing.price=i.price;existing.cents=i.cents;existing.source=i.source;existing.sourceUrl=i.sourceUrl;existing.checkedAt=i.checkedAt;existing.region=i.region;existing.discountType="none";existing.discountValue=0;existing.labelPrice=false;save();refresh();
         } else add(i);
-        if(SevenLookup.fresh(p,System.currentTimeMillis())&&!source.contains("更新失敗"))enqueueAutoShare(i,"seven");
+        if(SevenLookup.fresh(p,System.currentTimeMillis())&&!source.contains("更新失敗"))enqueueAutoShare(i,p.store.equals("seven")?"seven":"manual");
         status.setText(source+" · 確認 "+stamp(p.checkedAt));
     }
     private void loadSeven(String jan,boolean force,Item existing) {
         SevenLookup.Product saved=readSeven(jan);if(saved==null){promptSeven(jan,"",existing);return;}
-        if(!force&&SevenLookup.fresh(saved,System.currentTimeMillis())){useSeven(jan,saved,existing,"セブン掲載価格（24時間以内の保存値）");return;}
-        sevenTask(()->SevenLookup.load(saved.url),fresh->{
+        if(!force&&SevenLookup.fresh(saved,System.currentTimeMillis())){useSeven(jan,saved,existing,shopName()+"掲載価格（24時間以内の保存値）");return;}
+        sevenTask(()->StoreLookup.load(shop(),saved.url),fresh->{
             // Never silently accept a renamed/reused page, a price change, or a region change.
             if(!fresh.name.equals(saved.name)||fresh.cents!=saved.cents||!fresh.region.equals(saved.region)){confirmSeven(jan,fresh,existing);return;}
-            try{storeSeven(jan,fresh);useSeven(jan,fresh,existing,"セブン公式掲載価格");}catch(Exception e){message("取得結果を保存できませんでした。");}
+            try{storeSeven(jan,fresh);useSeven(jan,fresh,existing,shopName()+"公式掲載価格");}catch(Exception e){message("取得結果を保存できませんでした。");}
         },e->{
-            new ScanDialogBuilder(this).setTitle("セブン価格を更新できませんでした")
+            new ScanDialogBuilder(this).setTitle(shopName()+"価格を更新できませんでした")
                 .setMessage(sevenError(e)+"\n\n保存価格："+yenUnit(saved.cents)+"\n確認日時："+stamp(saved.checkedAt)+"\n古い価格の可能性があります。")
-                .setPositiveButton("保存価格を使う",(d,w)->useSeven(jan,saved,existing,"セブンの保存価格（更新失敗）"))
+                .setPositiveButton("保存価格を使う",(d,w)->useSeven(jan,saved,existing,shopName()+"の保存価格（更新失敗）"))
                 .setNeutralButton("ひも付けを変更",(d,w)->promptSeven(jan,saved.name,existing)).setNegativeButton("戻る",null).show();
         });
     }
@@ -949,10 +999,10 @@ public final class MainActivity extends AppCompatActivity {
         List<String> jans=new ArrayList<>(),labels=new ArrayList<>();
         try {
             JSONObject all=new JSONObject(prefs.getString("sevenLinks","{}"));Iterator<String> keys=all.keys();
-            while(keys.hasNext()){String j=keys.next();SevenLookup.Product p=readSeven(j);if(p!=null){jans.add(j);labels.add(p.name+"\nJAN "+j+" · "+yenUnit(p.cents)+"\n確認 "+stamp(p.checkedAt));}}
+            while(keys.hasNext()){String j=StoreLookup.janForKey(shop(),keys.next());if(j.isEmpty())continue;SevenLookup.Product p=readSeven(j);if(p!=null){jans.add(j);labels.add(p.name+"\nJAN "+j+" · "+yenUnit(p.cents)+"\n確認 "+stamp(p.checkedAt));}}
         }catch(Exception ignored){}
-        if(jans.isEmpty()){message("セブンの登録商品はありません。");return;}
-        new ScanDialogBuilder(this).setTitle("セブンの登録商品").setItems(labels.toArray(new String[0]),(d,w)->{String jan=jans.get(w);sevenActions(jan,readSeven(jan),cartItem(jan));}).setNegativeButton("閉じる",null).show();
+        if(jans.isEmpty()){message(shopName()+"の登録商品はありません。");return;}
+        new ScanDialogBuilder(this).setTitle(shopName()+"の登録商品").setItems(labels.toArray(new String[0]),(d,w)->{String jan=jans.get(w);sevenActions(jan,readSeven(jan),cartItem(jan));}).setNegativeButton("閉じる",null).show();
     }
     private void connectionTest(String id) {
         if(busy){message("通信中です。完了してから再試行してください。");return;}
@@ -978,7 +1028,7 @@ public final class MainActivity extends AppCompatActivity {
     }
     private void help() {
         new ScanDialogBuilder(this).setTitle("使い方")
-            .setMessage("① スキャンすると保存済み価格・Cloudflareの共有データを検索。未登録はセブン商品名検索へ（Yahoo!連携は任意）\n② スキャン、またはJAN番号を入力\n③ セブンは初回に商品・容量・地域とJANの一致を確認。次回から自動取得（24時間キャッシュ）\n④ 連続スキャンでは読取時に1回振動。次の商品をそのまま読めます。同じ商品は枠から約1秒外すか「同じコードを再読取」を押してください。初回の商品確認中は読取を一時停止します。\n\nセブン掲載価格と希望小売価格を区別して表示します。価格改定・地域・店頭値引き等で会計額と異なります。セブンの税込小数を保持し、合計で1円未満を切り捨てます。\n\n共有検索ではJANコードを設定先のサーバーに送信します。初期設定はCloudflareです。商品をひも付けたとき、JAN・商品名・1個の税込価格・取得元・登録日を自動送信します（設定で停止可能）。送信内容は管理者の確認後に共有検索へ表示します。カメラ画像は端末内で処理し送信しません。買い物一覧・残高・Client IDは端末内に保存されます。\n\n商品情報：Yahoo!ショッピング・セブン公式ページ。セブン利用時は検索語・商品URLを公式サイトに送信します。公式の提携アプリではありません。掲載情報は在庫や店頭価格を保証しません。")
+            .setMessage("① スキャンすると保存済み価格・Cloudflareの共有データを検索。未登録は"+shopName()+"商品名検索へ（Yahoo!連携は任意）\n② スキャン、またはJAN番号を入力\n③ "+shopName()+"は初回に商品・容量・地域とJANの一致を確認。次回から自動取得（24時間キャッシュ）\n④ 連続スキャンでは読取時に1回振動。次の商品をそのまま読めます。同じ商品は枠から約1秒外すか「同じコードを再読取」を押してください。初回の商品確認中は読取を一時停止します。\n\n"+shopName()+"掲載価格と希望小売価格を区別して表示します。価格改定・地域・店頭値引き等で会計額と異なります。"+shopName()+"の税込小数を保持し、合計で1円未満を切り捨てます。\n\n共有検索ではJANコードを設定先のサーバーに送信します。初期設定はCloudflareです。商品をひも付けたとき、JAN・商品名・1個の税込価格・取得元・登録日を自動送信します（設定で停止可能）。送信内容は管理者の確認後に共有検索へ表示します。カメラ画像は端末内で処理し送信しません。買い物一覧・残高・Client IDは端末内に保存されます。\n\n商品情報：Yahoo!ショッピング・"+shopName()+"公式ページ。"+shopName()+"利用時は検索語・商品URLを公式サイトに送信します。公式の提携アプリではありません。掲載情報は在庫や店頭価格を保証しません。")
             .setPositiveButton("閉じる",null).setNeutralButton("提供元",(d,w)->openUrl("https://shopping.yahoo.co.jp/")).show();
     }
     private void openUrl(String url) {

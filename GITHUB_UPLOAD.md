@@ -1,3 +1,5 @@
+v0.10.0 は Android の店舗対応です。Web版とCloudflare Workerのコード・D1スキーマ・既存 `wrangler.jsonc` の内容は変更していません。既存の実 `database_id` をテンプレートで置き換えないでください。
+
 # GitHubへアップロード（共有版 v0.9.0）
 
 `community-server/` に共有API・DB・承認ツールも含まれます。APIのデプロイは [community-server/README.md](community-server/README.md) を参照してください。GitHubへ置くだけでは共有サーバーは動きません。
