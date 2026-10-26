@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kaimono-community",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-23",
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "kaimono-community",
+    "database_id": "REPLACE_WITH_CREATED_DATABASE_ID",
+    "migrations_dir": "migrations"
+  }]
+}

@@ -1,0 +1,24 @@
+.gradle/
+local.properties
+**/build/
+.idea/
+*.iml
+
+# Local credentials and generated artifacts
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
+*.apk
+*.aab
+.DS_Store
+__pycache__/
+
+# Shared catalog development and credentials
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
+*.sqlite
+*.sqlite-*
