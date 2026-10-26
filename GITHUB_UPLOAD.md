@@ -1,4 +1,4 @@
-# GitHubへアップロード（共有版 v0.8.0）
+# GitHubへアップロード（共有版 v0.9.0）
 
 `community-server/` に共有API・DB・承認ツールも含まれます。APIのデプロイは [community-server/README.md](community-server/README.md) を参照してください。GitHubへ置くだけでは共有サーバーは動きません。
 
@@ -80,3 +80,7 @@ versionCode 17。PBLookup.java、assets/pb-names.json、MainActivity.java、PBLo
 ## v0.8.0 Material 3 UI
 
 versionCode 18。MainActivity、app/build.gradle、res配下の色・テーマ・アイコン、PixelUiTest.javaを更新します。Material Components 1.12.0を使用。署名鍵は以前の確認版キットを使用し、GitHubには含めません。既存のcommunity-server/wrangler.jsoncとdatabase_idは維持してください。サーバー・D1の更新は不要です。
+
+## v0.9.0 割引・値札OCR
+
+versionCode 19。Discount.java、LabelText.java、LabelScanActivity.java、MainActivity.java、AndroidManifest.xml、app/build.gradle、ic_label_scan.xml、追加テストを更新します。ML Kit日本語モデルを同梱するのでAPKサイズが増えます。既存のcommunity-server/wrangler.jsoncとdatabase_idは変更しないでください。サーバー・D1の更新は不要です。署名鍵はGitHubに含めません。
