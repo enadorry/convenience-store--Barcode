@@ -1,0 +1,14 @@
+<resources>
+ <color name="ui_canvas">#111318</color>
+ <color name="ui_surface">#1D2025</color>
+ <color name="ui_ink">#E2E2E9</color>
+ <color name="ui_muted">#C2C6D0</color>
+ <color name="ui_accent">#A9C7FF</color>
+ <color name="ui_container">#1C467F</color>
+ <color name="ui_on_container">#D6E3FF</color>
+ <color name="ui_line">#43474F</color>
+ <color name="ui_link">#A9C7FF</color>
+ <color name="ui_primary_text">#003062</color>
+ <color name="zxing_viewfinder_laser">@color/ui_accent</color>
+ <color name="zxing_possible_result_points">#FFFFFF</color>
+</resources>

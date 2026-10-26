@@ -1,0 +1,1 @@
+{"name":"kaimono-community-api","version":"1.0.0","private":true,"type":"module","scripts":{"test":"node --test test/*.test.js","dev":"wrangler dev","deploy":"wrangler deploy"},"devDependencies":{"wrangler":"^4"}}

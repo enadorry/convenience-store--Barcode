@@ -1,0 +1,28 @@
+<resources>
+ <style name="BaseAppTheme" parent="Theme.Material3.DayNight.NoActionBar">
+  <item name="android:fontFamily">sans-serif</item>
+  <item name="colorPrimary">@color/ui_accent</item>
+  <item name="colorOnPrimary">@color/ui_primary_text</item>
+  <item name="colorPrimaryContainer">@color/ui_container</item>
+  <item name="colorOnPrimaryContainer">@color/ui_on_container</item>
+  <item name="colorSecondaryContainer">@color/ui_surface</item>
+  <item name="colorOnSecondaryContainer">@color/ui_ink</item>
+  <item name="colorSurface">@color/ui_canvas</item>
+  <item name="colorSurfaceVariant">@color/ui_surface</item>
+  <item name="colorOnSurface">@color/ui_ink</item>
+  <item name="colorOnSurfaceVariant">@color/ui_muted</item>
+  <item name="colorOutlineVariant">@color/ui_line</item>
+  <item name="android:colorAccent">@color/ui_accent</item>
+  <item name="android:windowLightStatusBar">false</item>
+  <item name="android:windowBackground">@color/ui_canvas</item>
+  <item name="android:statusBarColor">@color/ui_canvas</item>
+  <item name="android:navigationBarColor">@color/ui_canvas</item>
+  <item name="android:windowActionModeOverlay">true</item>
+  <item name="materialAlertDialogTheme">@style/AppDialog</item>
+ </style>
+ <style name="AppTheme" parent="BaseAppTheme"/>
+ <style name="AppDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+  <item name="shapeAppearanceOverlay">@style/RoundedDialog</item>
+ </style>
+ <style name="RoundedDialog"><item name="cornerFamily">rounded</item><item name="cornerSize">28dp</item></style>
+</resources>
