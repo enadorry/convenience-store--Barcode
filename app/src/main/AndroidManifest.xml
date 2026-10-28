@@ -3,6 +3,7 @@
  <uses-permission android:name="android.permission.CAMERA" />
  <uses-permission android:name="android.permission.VIBRATE" />
  <uses-feature android:name="android.hardware.camera" android:required="false" />
+ <queries><package android:name="jp.ne.paypay.android.app" /></queries>
  <application android:theme="@style/AppTheme" android:label="${appLabel}" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true" android:usesCleartextTraffic="false">
   <activity android:name=".LabelScanActivity" android:exported="false" android:screenOrientation="portrait" />
   <activity android:name=".PortraitCaptureActivity" android:exported="false" android:screenOrientation="portrait" android:stateNotNeeded="true" android:configChanges="orientation|keyboardHidden|screenSize" android:theme="@style/zxing_CaptureTheme" />

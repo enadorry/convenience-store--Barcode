@@ -7,7 +7,7 @@ android {
   applicationId 'dev.enadorry.kaimonoscan'
   if (useCommunityBuild) applicationIdSuffix '.community'
   manifestPlaceholders = [appLabel: useCommunityBuild ? 'かいものスキャン 共有版' : 'かいものスキャン']
-  minSdk 24; targetSdk 35; versionCode 21; versionName '0.11.0'
+  minSdk 24; targetSdk 35; versionCode 22; versionName '0.12.0'
  }
  signingConfigs { debug { if (System.getenv('KAIMONO_DEBUG_KEYSTORE')) storeFile file(System.getenv('KAIMONO_DEBUG_KEYSTORE')) } }
 

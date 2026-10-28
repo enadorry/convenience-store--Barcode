@@ -221,6 +221,11 @@ public final class MainActivity extends AppCompatActivity {
     private void divider(LinearLayout parent){View line=new View(this);line.setBackgroundColor(LINE);parent.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));}
     private void space(LinearLayout l,int h) {View s=new View(this);l.addView(s,new LinearLayout.LayoutParams(1,dp(h)));}
     private void weighted(LinearLayout l,View v) {LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);lp.setMargins(dp(3),0,dp(3),0);l.addView(v,lp);}
+    private void openPayPay(){
+        android.content.Intent launch=getPackageManager().getLaunchIntentForPackage("jp.ne.paypay.android.app");
+        if(launch!=null){try{startActivity(launch);return;}catch(android.content.ActivityNotFoundException|SecurityException ignored){}}
+        openUrl("https://play.google.com/store/apps/details?id=jp.ne.paypay.android.app");
+    }
     private void build() {
         root=vertical();root.setPadding(dp(20),dp(14),dp(20),dp(8));root.setBackgroundColor(BG);
         if(android.os.Build.VERSION.SDK_INT>=30) root.setOnApplyWindowInsetsListener((v,insets)->{
@@ -246,6 +251,7 @@ public final class MainActivity extends AppCompatActivity {
         count=text("0点",14,ON_CONTAINER);summary.addView(count);discountSummary=text("",14,ON_CONTAINER);discountSummary.setVisibility(View.GONE);summary.addView(discountSummary);space(summary,8);
         walletSummary=text("",16,INK);summary.addView(walletSummary);space(summary,12);
         Button balanceButton=button("PayPay残高",false,this::walletSettings);summary.addView(balanceButton);
+        summary.addView(button("PayPayを開く",false,this::openPayPay));
         content.addView(summary);space(content,20);
         LinearLayout actions=horizontal();codeButton=button("JAN入力",false,this::codeInput);weighted(actions,codeButton);
         weighted(actions,button("手入力",false,()->edit("","",null,null,null)));content.addView(actions);space(content,8);
